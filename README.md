@@ -53,6 +53,7 @@ nano .env
 ```
 
 Set these values:
+
 ```env
 FORGEJO_URL=https://git.yourdomain.com
 FORGEJO_TOKEN=your-token-from-step-2
@@ -76,6 +77,7 @@ docker-compose logs -f
 1. In Coolify, go to **Sources** → **New Source**
 2. Select **GitHub Apps**
 3. Fill in:
+
    - **Name**: `Forgejo Bridge`
    - **HTML URL**: `http://your-server-ip:3456`
    - **API URL**: `http://your-server-ip:3456/api/v3`
@@ -106,6 +108,7 @@ Once connected, you can:
 ### Using Different Ports
 
 Edit `.env`:
+
 ```env
 BRIDGE_PORT=8080  # External port
 ```
@@ -115,9 +118,10 @@ BRIDGE_PORT=8080  # External port
 For production, consider:
 
 1. **Use Redis** for token storage:
+
    ```javascript
    // Add Redis support in forgejo-bridge.js
-   const redis = require('redis');
+   const redis = require("redis");
    const client = redis.createClient();
    ```
 
@@ -137,14 +141,17 @@ You can even deploy this bridge using Coolify:
 ## 🐛 Troubleshooting
 
 ### Bridge not accessible
+
 - Check firewall rules for port 3456
 - Verify Docker container is running: `docker-compose ps`
 
 ### Can't see repositories
+
 - Verify Forgejo token has correct permissions
 - Check bridge logs: `docker-compose logs`
 
 ### Webhooks not triggering
+
 - Ensure BRIDGE_URL is publicly accessible
 - Check webhook secrets match
 
@@ -187,9 +194,10 @@ If this bridge saves you time and manual webhook headaches, consider supporting 
 
 <a href="https://coff.ee/caseyc" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>
 
-[![](https://img.shields.io/static/v1?label=Sponsor&message=%E2%9D%A4&logo=GitHub&color=%23fe8e86)](https://github.com/sponsors/yourusername)
+[![](https://img.shields.io/static/v1?label=Sponsor&message=%E2%9D%A4&logo=GitHub&color=%23fe8e86)](https://github.com/sponsors/ccollier86)
 
 **Crypto Donations:**
+
 - **Bitcoin**: `bc1qyouradress...`
 - **Ethereum**: `0xYourAddress...`
 - **Monero**: `YourMoneroAddress...`
