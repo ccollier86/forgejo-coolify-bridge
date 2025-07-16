@@ -1,34 +1,47 @@
-# Environment variables
+# Dependencies
+node_modules/
+package-lock.json
+
+# Environment files
 .env
 .env.local
 .env.*.local
 
-# Node
-node_modules/
+# Logs
+logs/
+*.log
 npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
 
-# Editor directories and files
-.idea
-.vscode
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Cache directories
+.npm
+.cache/
+
+# IDE files
+.vscode/
+.idea/
 *.swp
 *.swo
 *~
 
-# OS
+# OS files
 .DS_Store
 Thumbs.db
 
-# Logs
-logs/
-*.log
+# Docker volumes
+data/
+volumes/
 
-# Keys
-*.pem
-*.key
-private-key.pem
+# Temporary files
+tmp/
+temp/
+*.tmp
 
-# Build artifacts
+# Build files
 dist/
 build/

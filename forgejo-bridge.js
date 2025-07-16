@@ -1,6 +1,9 @@
 const express = require('express');
 const axios = require('axios');
 const crypto = require('crypto');
+const { exec } = require('child_process');
+const fs = require('fs').promises;
+const path = require('path');
 const app = express();
 
 // Configuration from environment variables
@@ -9,7 +12,8 @@ const CONFIG = {
   FORGEJO_TOKEN: process.env.FORGEJO_TOKEN,
   BRIDGE_PORT: process.env.PORT || 3000,
   BRIDGE_SECRET: process.env.BRIDGE_SECRET || crypto.randomBytes(32).toString('hex'),
-  COOLIFY_WEBHOOK_URL: process.env.COOLIFY_WEBHOOK_URL || 'https://your-coolify.com/api/v1/webhooks/github'
+  COOLIFY_WEBHOOK_URL: process.env.COOLIFY_WEBHOOK_URL || 'https://your-coolify.com/api/v1/webhooks/github',
+  INTERNAL_BRIDGE_IP: process.env.INTERNAL_BRIDGE_IP || 'localhost'
 };
 
 // In-memory token store (use Redis for production)
@@ -23,6 +27,137 @@ app.use(express.urlencoded({ extended: true }));
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', bridge: 'forgejo-coolify', version: '1.0.0' });
 });
+
+// Git server implementation - serve repos to Coolify
+app.all('*', async (req, res, next) => {
+  // Log ALL requests for debugging
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}${req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : ''}`);
+  
+  // Check if this is a git operation
+  const gitMatch = req.path.match(/\/([^/]+)\/([^/]+)\.git\/(info\/refs|git-upload-pack|git-receive-pack)/);
+  if (!gitMatch) {
+    return next();
+  }
+  
+  const [, owner, repo, gitOp] = gitMatch;
+  const repoPath = `${owner}/${repo}`;
+  const cacheDir = `/tmp/git-cache/${owner}/${repo}.git`;
+  
+  console.log(`[GIT SERVER] Request: ${req.method} ${repoPath} - ${gitOp}`);
+  console.log(`[GIT SERVER] Query:`, req.query);
+  
+  try {
+    // Ensure cache directory exists
+    await fs.mkdir(path.dirname(cacheDir), { recursive: true });
+    
+    // Clone or update the repo from Forgejo
+    const forgejoUrl = `${CONFIG.FORGEJO_URL}/${repoPath}.git`;
+    
+    try {
+      await fs.access(cacheDir);
+      // Repo exists, fetch updates
+      console.log(`[GIT SERVER] Fetching updates for ${repoPath}`);
+      await execPromise(`cd ${cacheDir} && git -c http.extraHeader="Authorization: token ${CONFIG.FORGEJO_TOKEN}" fetch --all`);
+    } catch (e) {
+      // Repo doesn't exist, clone it
+      console.log(`[GIT SERVER] Cloning ${repoPath} from ${forgejoUrl}`);
+      await execPromise(`git -c http.extraHeader="Authorization: token ${CONFIG.FORGEJO_TOKEN}" clone --bare ${forgejoUrl} ${cacheDir}`);
+    }
+    
+    // Handle git operations using git's CGI interface
+    if (gitOp === 'info/refs' || gitOp === 'git-upload-pack' || gitOp === 'git-receive-pack') {
+      console.log(`[GIT SERVER] Handling ${gitOp} for ${repoPath}`);
+      
+      // Set up environment for git http-backend
+      const env = {
+        ...process.env,
+        'GIT_PROJECT_ROOT': '/tmp/git-cache',
+        'GIT_HTTP_EXPORT_ALL': '1',
+        'REQUEST_METHOD': req.method,
+        'PATH_INFO': `/${owner}/${repo}.git/${gitOp}`,
+        'REMOTE_USER': 'git',
+        'REMOTE_ADDR': req.ip || req.connection.remoteAddress,
+        'CONTENT_TYPE': req.headers['content-type'] || '',
+        'QUERY_STRING': require('querystring').stringify(req.query),
+        'REQUEST_URI': req.originalUrl
+      };
+      
+      if (req.headers['content-length']) {
+        env['CONTENT_LENGTH'] = req.headers['content-length'];
+      }
+      
+      console.log(`[GIT SERVER] Executing git http-backend with PATH_INFO=${env.PATH_INFO}`);
+      
+      const gitHttpBackend = require('child_process').spawn('git', ['http-backend'], {
+        env: env
+      });
+      
+      // Pipe request to git http-backend
+      if (req.method !== 'GET') {
+        req.pipe(gitHttpBackend.stdin);
+      }
+      
+      // Parse headers from git http-backend
+      let headers = '';
+      let headersParsed = false;
+      
+      gitHttpBackend.stdout.on('data', (data) => {
+        if (!headersParsed) {
+          headers += data.toString();
+          const headerEnd = headers.indexOf('\r\n\r\n');
+          if (headerEnd !== -1) {
+            headersParsed = true;
+            const headerLines = headers.substring(0, headerEnd).split('\r\n');
+            headerLines.forEach(line => {
+              const [key, value] = line.split(': ');
+              if (key && value) {
+                res.setHeader(key, value);
+              }
+            });
+            // Send the rest of the data
+            const bodyStart = headerEnd + 4;
+            if (headers.length > bodyStart) {
+              res.write(headers.substring(bodyStart));
+            }
+          }
+        } else {
+          res.write(data);
+        }
+      });
+      
+      gitHttpBackend.stderr.on('data', (data) => {
+        console.error(`[GIT SERVER] Error: ${data}`);
+      });
+      
+      gitHttpBackend.on('close', (code) => {
+        console.log(`[GIT SERVER] Git http-backend exited with code ${code}`);
+        res.end();
+        
+        // Clean up after 5 minutes
+        setTimeout(() => {
+          fs.rm(cacheDir, { recursive: true, force: true }).catch(console.error);
+        }, 5 * 60 * 1000);
+      });
+    }
+    
+  } catch (error) {
+    console.error('[GIT SERVER] Error:', error.message);
+    res.status(500).send('Git server error');
+  }
+});
+
+// Helper function to promisify exec
+function execPromise(command, options = {}) {
+  return new Promise((resolve, reject) => {
+    exec(command, { ...options, encoding: options.encoding || 'utf8' }, (error, stdout, stderr) => {
+      if (error) {
+        reject(error);
+      } else {
+        resolve({ stdout, stderr });
+      }
+    });
+  });
+}
 
 // OAuth endpoints that Coolify expects
 app.get('/login/oauth/authorize', (req, res) => {
@@ -106,7 +241,7 @@ app.get('/api/v3/user/repos', async (req, res) => {
       updated_at: repo.updated_at,
       pushed_at: repo.updated_at,
       ssh_url: repo.ssh_url,
-      clone_url: repo.clone_url,
+      clone_url: `http://${CONFIG.INTERNAL_BRIDGE_IP}/${repo.full_name}.git`,
       default_branch: repo.default_branch,
       owner: {
         login: repo.owner.login,
@@ -138,7 +273,7 @@ app.get('/api/v3/repos/:owner/:repo', async (req, res) => {
       html_url: response.data.html_url,
       description: response.data.description,
       ssh_url: response.data.ssh_url,
-      clone_url: response.data.clone_url,
+      clone_url: `http://${CONFIG.INTERNAL_BRIDGE_IP}/${response.data.full_name}.git`,
       default_branch: response.data.default_branch,
       owner: {
         login: response.data.owner.login,
@@ -253,6 +388,7 @@ app.get('/api/v3/installation/repositories', async (req, res) => {
       name: repo.name,
       full_name: repo.full_name,
       private: repo.private,
+      clone_url: `http://${CONFIG.INTERNAL_BRIDGE_IP}/${repo.full_name}.git`,
       owner: {
         login: repo.owner.login,
         id: repo.owner.id

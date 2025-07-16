@@ -1,5 +1,8 @@
 FROM node:18-alpine
 
+# Install git and git-daemon (includes http-backend)
+RUN apk add --no-cache git git-daemon
+
 # Add labels
 LABEL maintainer="Catalyst Lab"
 LABEL description="Forgejo-Coolify Bridge"
