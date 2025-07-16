@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  forgejo-bridge:
+    build: .
+    container_name: forgejo-coolify-bridge
+    restart: unless-stopped
+    ports:
+      - "${BRIDGE_PORT:-3456}:3000"
+    environment:
+      - FORGEJO_URL=${FORGEJO_URL}
+      - FORGEJO_TOKEN=${FORGEJO_TOKEN}
+      - BRIDGE_SECRET=${BRIDGE_SECRET}
+      - COOLIFY_WEBHOOK_URL=${COOLIFY_WEBHOOK_URL}
+      - BRIDGE_URL=${BRIDGE_URL}
+    networks:
+      - coolify
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+networks:
+  coolify:
+    external: true
