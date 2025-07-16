@@ -169,7 +169,7 @@ MIT License - feel free to use this in your own projects!
 
 ## 🙏 Acknowledgments
 
-- Created by [@catalystlab](https://github.com/catalystlab) with the help of Claude
+- Created by [@catalystlab](https://github.com/catalystlab)
 - Inspired by the need for better Forgejo integration with modern deployment platforms
 - Thanks to the Coolify and Forgejo communities
 
