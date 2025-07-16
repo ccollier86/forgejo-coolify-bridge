@@ -196,10 +196,4 @@ If this bridge saves you time and manual webhook headaches, consider supporting 
 
 [![](https://img.shields.io/static/v1?label=Sponsor&message=%E2%9D%A4&logo=GitHub&color=%23fe8e86)](https://github.com/sponsors/ccollier86)
 
-**Crypto Donations:**
-
-- **Bitcoin**: `bc1qyouradress...`
-- **Ethereum**: `0xYourAddress...`
-- **Monero**: `YourMoneroAddress...`
-
 Your support helps maintain this project and develop new features! 🚀
