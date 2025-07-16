@@ -210,6 +210,37 @@ app.get('/api/v3/app/installations', (req, res) => {
   }]);
 });
 
+// GitHub App installation token endpoint
+app.post('/api/v3/app/installations/:installationId/access_tokens', (req, res) => {
+  // Return a fake installation token
+  res.json({
+    token: `ghs_${crypto.randomBytes(20).toString('hex')}`,
+    expires_at: new Date(Date.now() + 3600000).toISOString(), // 1 hour from now
+    permissions: {
+      contents: 'read',
+      metadata: 'read', 
+      pull_requests: 'write',
+      issues: 'write'
+    },
+    repository_selection: 'all'
+  });
+});
+
+// Installation endpoint
+app.get('/api/v3/installation', (req, res) => {
+  res.json({
+    id: 1,
+    account: {
+      login: 'forgejo-user',
+      id: 1,
+      type: 'User'
+    },
+    repository_selection: 'all',
+    access_tokens_url: '/api/v3/app/installations/1/access_tokens',
+    repositories_url: '/api/v3/installation/repositories'
+  });
+});
+
 app.get('/api/v3/installation/repositories', async (req, res) => {
   try {
     const response = await axios.get(`${CONFIG.FORGEJO_URL}/api/v1/user/repos`, {
