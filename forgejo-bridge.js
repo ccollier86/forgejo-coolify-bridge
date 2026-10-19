@@ -4,7 +4,6 @@ const crypto = require('crypto');
 const { exec } = require('child_process');
 const fs = require('fs').promises;
 const path = require('path');
-const { forwardGitHttpResponse } = require('./git-http-response');
 const app = express();
 
 // Configuration from environment variables
@@ -98,7 +97,33 @@ app.all('*', async (req, res, next) => {
         req.pipe(gitHttpBackend.stdin);
       }
       
-      forwardGitHttpResponse(gitHttpBackend.stdout, res);
+      // Parse headers from git http-backend
+      let headers = Buffer.alloc(0);
+      let headersParsed = false;
+      
+      gitHttpBackend.stdout.on('data', (data) => {
+        if (!headersParsed) {
+          headers = Buffer.concat([headers, data]);
+          const headerEnd = headers.indexOf('\r\n\r\n');
+          if (headerEnd !== -1) {
+            headersParsed = true;
+            const headerLines = headers.subarray(0, headerEnd).toString('latin1').split('\r\n');
+            headerLines.forEach(line => {
+              const [key, value] = line.split(': ');
+              if (key && value) {
+                res.setHeader(key, value);
+              }
+            });
+            // Send the rest of the data
+            const bodyStart = headerEnd + 4;
+            if (headers.length > bodyStart) {
+              res.write(headers.subarray(bodyStart));
+            }
+          }
+        } else {
+          res.write(data);
+        }
+      });
       
       gitHttpBackend.stderr.on('data', (data) => {
         console.error(`[GIT SERVER] Error: ${data}`);
