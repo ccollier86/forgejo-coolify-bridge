@@ -4,6 +4,7 @@
   "description": "A bridge service that allows Forgejo to work as a native source provider in Coolify",
   "main": "forgejo-bridge.js",
   "scripts": {
+    "test": "node --test test/*.test.js",
     "start": "node forgejo-bridge.js",
     "dev": "nodemon forgejo-bridge.js",
     "docker:build": "docker build -t forgejo-coolify-bridge .",
