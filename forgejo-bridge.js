@@ -98,16 +98,16 @@ app.all('*', async (req, res, next) => {
       }
       
       // Parse headers from git http-backend
-      let headers = '';
+      let headers = Buffer.alloc(0);
       let headersParsed = false;
       
       gitHttpBackend.stdout.on('data', (data) => {
         if (!headersParsed) {
-          headers += data.toString();
+          headers = Buffer.concat([headers, data]);
           const headerEnd = headers.indexOf('\r\n\r\n');
           if (headerEnd !== -1) {
             headersParsed = true;
-            const headerLines = headers.substring(0, headerEnd).split('\r\n');
+            const headerLines = headers.subarray(0, headerEnd).toString('latin1').split('\r\n');
             headerLines.forEach(line => {
               const [key, value] = line.split(': ');
               if (key && value) {
@@ -117,7 +117,7 @@ app.all('*', async (req, res, next) => {
             // Send the rest of the data
             const bodyStart = headerEnd + 4;
             if (headers.length > bodyStart) {
-              res.write(headers.substring(bodyStart));
+              res.write(headers.subarray(bodyStart));
             }
           }
         } else {
